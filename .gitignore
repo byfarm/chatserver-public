@@ -1,0 +1,7 @@
+**.swp
+**.env
+**.vscode/
+**.embuild/
+**target/
+**Cargo.lock
+**cfg.toml
