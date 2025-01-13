@@ -72,7 +72,10 @@ fn handle_request(stream: &TcpStream) -> Result<String, Box<dyn std::error::Erro
     let response: String = match parsed_request.action.as_str() {
         "recieve" => read_message_from_db(),
         "createuser" => match find_user(parsed_request.ipaddress.clone()) {
-            Ok(_) => "user is already in database.".to_string(),
+            Ok(user_pk) => {
+                println!("{}", user_pk);
+                "checking user pk".to_string()
+            },
             Err(_) => {
                 create_user(parsed_request.ipaddress, parsed_request.messages)?;
                 "user created!".to_string()

@@ -27,7 +27,7 @@ pub struct ClientToServer {
 // for passing cli arugments
 #[derive(Parser)]
 struct Cli {
-    /// the command to run (`send` or `recieve`)
+    /// the command to run (`send`, `recieve`, `createuser`)
     cmd: String,
 
     /// the message to send with the `send` command
@@ -52,7 +52,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 eprintln!("{}", e)
             }
         },
-        "send" => match send(args.message) {
+        "send" => match send(args.message, "send") {
+            Ok(_) => {
+                println!("success")
+            }
+            Err(e) => {
+                eprintln!("{}", e)
+            }
+        },
+        "createuser" => match send(args.message, "createuser") {
             Ok(_) => {
                 println!("success")
             }
@@ -65,14 +73,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn send(message: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+fn send(message: Option<String>, action: &str) -> Result<(), Box<dyn std::error::Error>> {
     // get the message from the option type
     let message_contents = message.expect("Send a Message, Dumbass.");
 
     // serialize the message to the sending json obj
     let sendee = ClientToServer {
         status: 200,
-        action: "send".to_owned(),
+        action: action.to_string(),
         messages: vec![message_contents],
         ipaddress: get_ipaddress(),
     };
