@@ -73,20 +73,33 @@ fn handle_request(stream: &TcpStream) -> Result<String, Box<dyn std::error::Erro
         "recieve" => read_message_from_db(),
         "createuser" => match find_user(parsed_request.ipaddress.clone()) {
             Ok(user_pk) => {
-                println!("{}", user_pk);
-                "checking user pk".to_string()
-            },
-            Err(_) => {
-                create_user(parsed_request.ipaddress, parsed_request.messages)?;
-                "user created!".to_string()
+                if user_pk == 0 {
+                    println!("{}", parsed_request.ipaddress);
+                    println!("{}", user_pk);
+                    let username = create_user(parsed_request.ipaddress, parsed_request.messages)?;
+                    format!("{} Created.", username)
+                } else {
+                    "User already in database.".to_string()
+                }
+            }
+            Err(e) => {
+                eprintln!("{}", e);
+                "Error in creating user.".to_string()
             }
         },
         "send" => match find_user(parsed_request.ipaddress) {
             Ok(user_pk) => {
-                write_new_messages_to_db(parsed_request.messages, user_pk);
-                "Success!".to_string()
+                if user_pk != 0 {
+                    write_new_messages_to_db(parsed_request.messages, user_pk);
+                    "Success!".to_string()
+                } else {
+                    "Must run `createuser` before you can send messages.".to_string()
+                }
             }
-            Err(_) => "Must run `createuser` before you can send messages.".to_string(),
+            Err(e) => {
+                eprintln!("{}", e);
+                "Error in finding user".to_string()
+            }
         },
         _ => "Invalid command. Only can run `send`, `recieve`, or `createuser`".to_string(),
     };
@@ -116,24 +129,35 @@ fn recieve_request(stream: &TcpStream) -> Result<ClientToServer, Box<dyn std::er
 fn find_user(ipaddress: String) -> Result<i64, Box<dyn std::error::Error>> {
     // finds the username in the database from the ip address
     let connection = Connection::open("chat.db")?;
-    let query = "SELECT pk FROM users WHERE ipaddress = :ipaddress LIMIT 1;";
-    let mut statement = connection.prepare(query)?;
-    statement.bind((":ipaddress", ipaddress.as_str()))?;
-
-    let user_pk = statement.read::<i64, _>("pk")?;
+    let query = format!("SELECT pk FROM users WHERE ipaddress = '{}' LIMIT 1;", ipaddress);
+    let mut user_pk: i64 = 0;
+    connection.iterate(query, |row| {
+        for (_, val) in row {
+            user_pk = val.unwrap().to_string().parse::<i64>().unwrap()
+        }
+        true
+    }).unwrap();
 
     return Ok(user_pk);
 }
 
-fn create_user(ipaddress: String, username: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+fn create_user(
+    ipaddress: String,
+    username: Vec<String>,
+) -> Result<String, Box<dyn std::error::Error>> {
     let connection = Connection::open("chat.db")?;
+
+    let user = username.join("");
+
     // sql injection!!
-    connection.execute(format!(
-        "INSERT INTO users (ipaddress, username) VALUES({}, {});",
-        ipaddress.as_str(),
-        username.join("")
-    ))?;
-    return Ok(());
+    let query = format!(
+        "INSERT INTO users (ipaddress, username) VALUES('{}', '{}');",
+        ipaddress.to_string(),
+        user,
+    );
+
+    connection.execute(query)?;
+    return Ok(user);
 }
 
 fn write_new_messages_to_db(messages: Vec<String>, user_pk: i64) {
@@ -156,13 +180,15 @@ fn write_new_messages_to_db(messages: Vec<String>, user_pk: i64) {
 
 fn read_message_from_db() -> String {
     let connection = Connection::open("chat.db").unwrap();
-    let query = "SELECT message FROM messages;";
+    let query = "SELECT username, message FROM messages JOIN users ON messages.user = users.pk;";
     let mut statement = connection.prepare(query).unwrap();
 
     let mut large_body = String::new();
     while let Ok(State::Row) = statement.next() {
-        large_body.push_str(&statement.read::<String, _>("message").unwrap());
-        large_body.push_str("\n");
+        let message = &statement.read::<String, _>("message").unwrap();
+        let user = &statement.read::<String, _>("username").unwrap();
+        let content = format!("{}: {}\n", user, message);
+        large_body.push_str(content.as_str());
     }
     return large_body;
 }
