@@ -1,9 +1,16 @@
 PRAGMA foreign_keys=OFF;
 BEGIN TRANSACTION;
+CREATE TABLE users (
+    pk INTEGER PRIMARY KEY,
+    username TEXT NOT NULL,
+    ipaddress TEXT NOT NULL
+);
 CREATE TABLE messages (
-pk INTEGER PRIMARY KEY,
-message TEXT NOT NULL,
-timestamp INTEGER NOT NULL,
-read TINYINT NOT NULL
+    pk INTEGER PRIMARY KEY,
+    message TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    read TINYINT NOT NULL,
+    user INTEGER NOT NULL,
+    FOREIGN KEY(user) REFERENCES users(pk)
 );
 COMMIT;
