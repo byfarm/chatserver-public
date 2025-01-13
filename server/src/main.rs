@@ -22,6 +22,7 @@ pub struct ClientToServer {
     status: u16,
     action: String,
     messages: Vec<String>,
+    ipaddress: String,
 }
 
 // add eof to each message
@@ -70,11 +71,21 @@ fn handle_request(stream: &TcpStream) -> Result<String, Box<dyn std::error::Erro
 
     let response: String = match parsed_request.action.as_str() {
         "recieve" => read_message_from_db(),
-        "send" => {
-            write_new_messages_to_db(parsed_request.messages);
-            "Success!".to_string()
-        }
-        _ => "Invalid command. Only can run `send` or `recieve`".to_string(),
+        "createuser" => match find_user(parsed_request.ipaddress.clone()) {
+            Ok(_) => "user is already in database.".to_string(),
+            Err(_) => {
+                create_user(parsed_request.ipaddress, parsed_request.messages)?;
+                "user created!".to_string()
+            }
+        },
+        "send" => match find_user(parsed_request.ipaddress) {
+            Ok(user_pk) => {
+                write_new_messages_to_db(parsed_request.messages, user_pk);
+                "Success!".to_string()
+            }
+            Err(_) => "Must run `createuser` before you can send messages.".to_string(),
+        },
+        _ => "Invalid command. Only can run `send`, `recieve`, or `createuser`".to_string(),
     };
     Ok(response)
 }
@@ -99,7 +110,30 @@ fn recieve_request(stream: &TcpStream) -> Result<ClientToServer, Box<dyn std::er
     Ok(request)
 }
 
-fn write_new_messages_to_db(messages: Vec<String>) {
+fn find_user(ipaddress: String) -> Result<i64, Box<dyn std::error::Error>> {
+    // finds the username in the database from the ip address
+    let connection = Connection::open("chat.db")?;
+    let query = "SELECT pk FROM users WHERE ipaddress = :ipaddress LIMIT 1;";
+    let mut statement = connection.prepare(query)?;
+    statement.bind((":ipaddress", ipaddress.as_str()))?;
+
+    let user_pk = statement.read::<i64, _>("pk")?;
+
+    return Ok(user_pk);
+}
+
+fn create_user(ipaddress: String, username: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let connection = Connection::open("chat.db")?;
+    // sql injection!!
+    connection.execute(format!(
+        "INSERT INTO users (ipaddress, username) VALUES({}, {});",
+        ipaddress.as_str(),
+        username.join("")
+    ))?;
+    return Ok(());
+}
+
+fn write_new_messages_to_db(messages: Vec<String>, user_pk: i64) {
     let connection = Connection::open("chat.db").unwrap();
     for msg in messages {
         let time = SystemTime::now()
@@ -109,9 +143,9 @@ fn write_new_messages_to_db(messages: Vec<String>) {
 
         let query = format!(
             "
-        INSERT INTO messages (message, timestamp, read) VALUES ('{}', {}, 0);
+        INSERT INTO messages (message, timestamp, read, user) VALUES ('{}', {}, 0, {});
         ",
-            msg, time
+            msg, time, user_pk
         );
         connection.execute(query).unwrap();
     }

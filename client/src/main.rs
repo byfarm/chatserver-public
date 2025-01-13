@@ -1,9 +1,10 @@
 use anyhow::Result;
+use clap::Parser;
 use dotenv::dotenv;
 use std::env;
-use clap::Parser;
 use std::io::{prelude::*, BufReader};
 use std::net::TcpStream;
+use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -20,6 +21,7 @@ pub struct ClientToServer {
     status: u16,
     action: String,
     messages: Vec<String>,
+    ipaddress: String,
 }
 
 // for passing cli arugments
@@ -43,12 +45,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // match the cli arguments
     match args.cmd.as_str() {
         "recieve" => match recieve() {
-            Ok(_) => {println!("success")}
-            Err(e) => {eprintln!("{}", e)}
+            Ok(_) => {
+                println!("success")
+            }
+            Err(e) => {
+                eprintln!("{}", e)
+            }
         },
         "send" => match send(args.message) {
-            Ok(_) => {println!("success")}
-            Err(e) => {eprintln!("{}", e)}
+            Ok(_) => {
+                println!("success")
+            }
+            Err(e) => {
+                eprintln!("{}", e)
+            }
         },
         _ => println!("Put in a valid command dumbass"),
     }
@@ -64,6 +74,7 @@ fn send(message: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         status: 200,
         action: "send".to_owned(),
         messages: vec![message_contents],
+        ipaddress: get_ipaddress(),
     };
 
     // send the message and get the response
@@ -74,11 +85,26 @@ fn send(message: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn get_ipaddress() -> String {
+    // gets the ipaddress based on a command
+    let output = Command::new("bash")
+        .arg("-c")
+        .arg("hostname -I | awk '{print $1}'")
+        .output()
+        .expect("ipaddress command failed.\n");
+
+    let ipaddress = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    return ipaddress
+}
+
 fn recieve() -> Result<(), Box<dyn std::error::Error>> {
+
     let sendee = ClientToServer {
         status: 200,
         action: "recieve".to_owned(),
         messages: Vec::new(),
+        ipaddress: get_ipaddress(),
     };
 
     // send the message and get the response

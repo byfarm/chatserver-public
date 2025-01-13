@@ -3,7 +3,7 @@ BEGIN TRANSACTION;
 CREATE TABLE users (
     pk INTEGER PRIMARY KEY,
     username TEXT NOT NULL,
-    ipaddress TEXT NOT NULL
+    ipaddress TEXT NOT NULL UNIQUE
 );
 CREATE TABLE messages (
     pk INTEGER PRIMARY KEY,
